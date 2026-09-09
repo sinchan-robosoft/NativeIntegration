@@ -1,0 +1,23 @@
+import type { StyleProp, ViewStyle } from 'react-native';
+
+export type OnLoadEventPayload = {
+  url: string;
+};
+
+export type BatteryModuleEvents = {
+  onChange: (params: ChangeEventPayload) => void;
+};
+
+export type ChangeEventPayload = {
+  value: string;
+};
+
+export type BatteryModuleViewProps = {
+  onLogin: (event: {
+    nativeEvent: {
+      email: string;
+      password: string;
+    };
+  }) => void;
+  style?: StyleProp<ViewStyle>;
+};
