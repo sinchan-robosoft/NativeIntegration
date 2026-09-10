@@ -83,7 +83,8 @@ export default function RootLayout() {
             style = {{
               display : "flex",
               flexDirection : "row",
-              justifyContent : "space-between"
+              justifyContent : "center",
+              gap : 3
             }}
           >
             <Button
