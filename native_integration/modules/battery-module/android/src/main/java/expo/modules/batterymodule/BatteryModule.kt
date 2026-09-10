@@ -1,12 +1,19 @@
 package expo.modules.batterymodule
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.BatteryManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 
@@ -19,10 +26,6 @@ class BatteryModule : Module() {
   override fun definition() = ModuleDefinition {
 
     Name("BatteryModule")
-
-    // ---------------------------------------------------------
-    // 1. Get Battery Level
-    // ---------------------------------------------------------
 
     Function("getBatteryLevel") {
 
@@ -37,54 +40,31 @@ class BatteryModule : Module() {
       )
     }
 
-
-    // ---------------------------------------------------------
-    // 2. Native Login View
-    // ---------------------------------------------------------
-
     View(BatteryModuleView::class) {
       Events("onLogin")
     }
 
-
-    // ---------------------------------------------------------
-    // 3. Biometric Authentication
-    // ---------------------------------------------------------
-
     AsyncFunction("authenticate") { promise: Promise ->
 
-      // Get the current Android Activity
       val activity = appContext.currentActivity
 
-      // Activity doesn't exist
       if (activity == null) {
-
         promise.reject(
           "NO_ACTIVITY",
           "Current activity is not available",
           null
         )
-
         return@AsyncFunction
       }
 
-
-      // BiometricPrompt requires FragmentActivity
       if (activity !is FragmentActivity) {
-
         promise.reject(
           "INVALID_ACTIVITY",
           "Current activity is not a FragmentActivity",
           null
         )
-
         return@AsyncFunction
       }
-
-
-      // -------------------------------------------------------
-      // Check whether biometric authentication is available
-      // -------------------------------------------------------
 
       val biometricManager =
         BiometricManager.from(activity)
@@ -94,32 +74,17 @@ class BatteryModule : Module() {
           BiometricManager.Authenticators.BIOMETRIC_STRONG
         )
 
-
       if (canAuthenticate != BiometricManager.BIOMETRIC_SUCCESS) {
-
         promise.reject(
           "BIOMETRIC_UNAVAILABLE",
           "Biometric authentication is not available",
           null
         )
-
         return@AsyncFunction
       }
 
-
-      // -------------------------------------------------------
-      // Get the main/UI thread executor
-      // -------------------------------------------------------
-
       val executor =
         ContextCompat.getMainExecutor(activity)
-
-
-      // -------------------------------------------------------
-      // IMPORTANT:
-      // BiometricPrompt must be created and started
-      // on the Android main thread.
-      // -------------------------------------------------------
 
       Handler(Looper.getMainLooper()).post {
 
@@ -129,14 +94,9 @@ class BatteryModule : Module() {
             executor,
             object : BiometricPrompt.AuthenticationCallback() {
 
-              // -----------------------------------------------
-              // Authentication successful
-              // -----------------------------------------------
-
               override fun onAuthenticationSucceeded(
                 result: BiometricPrompt.AuthenticationResult
               ) {
-
                 promise.resolve(
                   mapOf(
                     "success" to true
@@ -144,16 +104,10 @@ class BatteryModule : Module() {
                 )
               }
 
-
-              // -----------------------------------------------
-              // Authentication error
-              // -----------------------------------------------
-
               override fun onAuthenticationError(
                 errorCode: Int,
                 errString: CharSequence
               ) {
-
                 promise.resolve(
                   mapOf(
                     "success" to false,
@@ -163,25 +117,10 @@ class BatteryModule : Module() {
                 )
               }
 
-
-              // -----------------------------------------------
-              // Authentication failed
-              // -----------------------------------------------
-
               override fun onAuthenticationFailed() {
-
-                // This does NOT mean the entire authentication
-                // process has ended.
-                //
-                // The user can try their fingerprint again.
               }
             }
           )
-
-
-        // -----------------------------------------------------
-        // Configure the biometric dialog
-        // -----------------------------------------------------
 
         val promptInfo =
           BiometricPrompt.PromptInfo.Builder()
@@ -190,13 +129,113 @@ class BatteryModule : Module() {
             .setNegativeButtonText("Cancel")
             .build()
 
-
-        // -----------------------------------------------------
-        // Show biometric prompt
-        // -----------------------------------------------------
-
         biometricPrompt.authenticate(promptInfo)
       }
+    }
+
+    AsyncFunction("requestNotificationPermission") { promise: Promise ->
+
+      val activity = appContext.currentActivity
+
+      if (activity == null) {
+        promise.reject(
+          "NO_ACTIVITY",
+          "Current activity is not available",
+          null
+        )
+        return@AsyncFunction
+      }
+
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        promise.resolve(true)
+        return@AsyncFunction
+      }
+
+      if (
+        ContextCompat.checkSelfPermission(
+          activity,
+          Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+      ) {
+        promise.resolve(true)
+        return@AsyncFunction
+      }
+
+      ActivityCompat.requestPermissions(
+        activity,
+        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+        1001
+      )
+
+      promise.resolve(false)
+    }
+
+    AsyncFunction("showNotification") { title: String, message: String, promise: Promise ->
+
+      val context = appContext.reactContext
+
+      if (context == null) {
+        promise.reject(
+          "NO_CONTEXT",
+          "React context is not available",
+          null
+        )
+        return@AsyncFunction
+      }
+
+      if (
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(
+          context,
+          Manifest.permission.POST_NOTIFICATIONS
+        ) != PackageManager.PERMISSION_GRANTED
+      ) {
+        promise.reject(
+          "NOTIFICATION_PERMISSION_DENIED",
+          "Notification permission has not been granted",
+          null
+        )
+        return@AsyncFunction
+      }
+
+      val channelId = "default"
+
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+        val channel =
+          NotificationChannel(
+            channelId,
+            "Default Notifications",
+            NotificationManager.IMPORTANCE_DEFAULT
+          )
+
+        val notificationManager =
+          context.getSystemService(NotificationManager::class.java)
+
+        notificationManager.createNotificationChannel(channel)
+      }
+
+      val notification =
+        NotificationCompat.Builder(context, channelId)
+          .setSmallIcon(android.R.drawable.ic_dialog_info)
+          .setContentTitle(title)
+          .setContentText(message)
+          .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+          .setAutoCancel(true)
+          .build()
+
+      val notificationManager =
+        ContextCompat.getSystemService(
+          context,
+          NotificationManager::class.java
+        )
+
+      notificationManager?.notify(
+        System.currentTimeMillis().toInt(),
+        notification
+      )
+
+      promise.resolve(true)
     }
   }
 }

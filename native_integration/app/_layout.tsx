@@ -31,6 +31,29 @@ export default function RootLayout() {
       console.error("Biometric error:", error);
     }
   };
+  const handleNotificationPermission = async () => {
+  try {
+    const result =
+      await BatteryModule.BatteryModule.requestNotificationPermission();
+
+    console.log("Permission result:", result);
+  } catch (error) {
+    console.error("Permission error:", error);
+  }
+};
+  const handleNotification = async () => {
+  try {
+    const result =
+      await BatteryModule.BatteryModule.showNotification(
+        "Native Notification",
+        "Hello from Kotlin!"
+      );
+
+    console.log("Notification result:", result);
+  } catch (error) {
+    console.error("Notification error:", error);
+  }
+};
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <SafeAreaView style={{
@@ -51,12 +74,30 @@ export default function RootLayout() {
             console.log("Password:", password);
           }}
         />
-        <View style={{ flex: 1, justifyContent: "center" }}>
+        <View style={{ flex: 1, justifyContent: "center",gap : 2 }}>
           <Button
             title="Authenticate"
             onPress={handleAuthenticate}
           />
+          <View
+            style = {{
+              display : "flex",
+              flexDirection : "row",
+              justifyContent : "space-between"
+            }}
+          >
+            <Button
+            title="Get Permission"
+            onPress={handleNotificationPermission}
+          />
+          <Button
+            title="Show Notification"
+            onPress={handleNotification}
+          />
+          </View>
+          
         </View>
+
       </SafeAreaView>
 
       <StatusBar style="auto" />
